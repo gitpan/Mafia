@@ -1,29 +1,26 @@
---- #YAML:1.0
-name:               Mafia
-version:            0.001
-abstract:           easily moderate Mafia games
+---
+abstract: 'easily moderate Mafia games'
 author:
-    - Marius Gavrilescu <marius@ieval.ro>
-license:            perl
-distribution_type:  module
-configure_requires:
-    ExtUtils::MakeMaker:  0
+  - 'Marius Gavrilescu <marius@ieval.ro>'
 build_requires:
-    File::Basename:  0
-    File::Slurp:     0
-requires:
-    perl:      5.014000
-    Storable:  0
-resources:
-    repository:
-        type:  git
-        url:   http://git.ieval.ro/git/mafia.git
-        web:   http://git.ieval.ro/?p=mafia.git
-no_index:
-    directory:
-        - t
-        - inc
-generated_by:       ExtUtils::MakeMaker version 6.57_05
+  File::Basename: '0'
+  File::Slurp: '0'
+configure_requires:
+  ExtUtils::MakeMaker: '0'
+dynamic_config: 0
+generated_by: 'ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.142060'
+license: perl
 meta-spec:
-    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
-    version:  1.4
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: '1.4'
+name: Mafia
+no_index:
+  directory:
+    - t
+    - inc
+requires:
+  Storable: '0'
+  perl: '5.014000'
+resources:
+  repository: http://git.ieval.ro/?p=mafia.git
+version: '0.001001'

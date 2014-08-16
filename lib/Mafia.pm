@@ -3,52 +3,53 @@ package Mafia;
 use 5.014000;
 use strict;
 use warnings;
+no if $] > 5.017011, warnings => 'experimental::smartmatch';
 use parent qw/Exporter/;
 
 use constant;
 use Storable qw/dclone/;
 
-our $VERSION = '0.001';
+our $VERSION = '0.001001';
 
 sub defconst { constant->import($_ => $_) for @_ }
 
 BEGIN {
-  # Roles
-  defconst qw/vanilla goon doctor vigilante roleblocker jailkeeper gunsmith tracker watcher bodyguard rolecop cop sk hider/;
+	# Roles
+	defconst qw/vanilla goon doctor vigilante roleblocker jailkeeper gunsmith tracker watcher bodyguard rolecop cop sk hider/;
 
-  # Factions
-  defconst qw/mafia town/;
+	# Factions
+	defconst qw/mafia town/;
 
-  # Extra traits
-  defconst qw/miller godfather weak macho bulletproof/;
+	# Extra traits
+	defconst qw/miller godfather weak macho bulletproof/;
 
-  # Messages
-  defconst qw/MSG_NIGHT MSG_DAY MSG_PLAYERS_ALIVE MSG_DEATH MSG_GUNCHECK MSG_NORESULT MSG_TRACK MSG_WATCH MSG_COP MSG_ROLECOP/;
+	# Messages
+	defconst qw/MSG_NIGHT MSG_DAY MSG_PLAYERS_ALIVE MSG_DEATH MSG_GUNCHECK MSG_NORESULT MSG_TRACK MSG_WATCH MSG_COP MSG_ROLECOP/;
 
-  # Action types
-  defconst qw/ACT_KILL ACT_LYNCH ACT_PROTECT ACT_GUARD ACT_ROLEBLOCK ACT_GUNCHECK ACT_TRACK ACT_WATCH ACT_ROLECOP ACT_COP ACT_TRACK_RESULT ACT_WATCH_RESULT ACT_HIDE/;
+	# Action types
+	defconst qw/ACT_KILL ACT_LYNCH ACT_PROTECT ACT_GUARD ACT_ROLEBLOCK ACT_GUNCHECK ACT_TRACK ACT_WATCH ACT_ROLECOP ACT_COP ACT_TRACK_RESULT ACT_WATCH_RESULT ACT_HIDE/;
 }
 
 use constant +{
-  townie => town,
-  ROLE => [vanilla, goon, doctor, vigilante, roleblocker, jailkeeper, gunsmith, tracker, watcher, bodyguard, rolecop, cop, sk, hider],
-  FACTION => [mafia, town],
-  FLAG => [miller, godfather, weak, macho, bulletproof],
-  ACTION_ORDER => [ACT_HIDE, ACT_ROLEBLOCK, ACT_PROTECT, ACT_GUARD, ACT_GUNCHECK, ACT_ROLECOP, ACT_COP, ACT_TRACK, ACT_WATCH, ACT_KILL, ACT_LYNCH, ACT_TRACK_RESULT, ACT_WATCH_RESULT],
-  INVESTIGATIVE_ACTIONS => [ACT_GUNCHECK, ACT_TRACK, ACT_WATCH, ACT_ROLECOP, ACT_COP],
-  GUNROLES => [vigilante, gunsmith],
+	townie => town,
+	ROLE => [vanilla, goon, doctor, vigilante, roleblocker, jailkeeper, gunsmith, tracker, watcher, bodyguard, rolecop, cop, sk, hider],
+	FACTION => [mafia, town],
+	FLAG => [miller, godfather, weak, macho, bulletproof],
+	ACTION_ORDER => [ACT_HIDE, ACT_ROLEBLOCK, ACT_PROTECT, ACT_GUARD, ACT_GUNCHECK, ACT_ROLECOP, ACT_COP, ACT_TRACK, ACT_WATCH, ACT_KILL, ACT_LYNCH, ACT_TRACK_RESULT, ACT_WATCH_RESULT],
+	INVESTIGATIVE_ACTIONS => [ACT_GUNCHECK, ACT_TRACK, ACT_WATCH, ACT_ROLECOP, ACT_COP],
+	GUNROLES => [vigilante, gunsmith],
 };
 
 our @EXPORT = do {
-  no strict 'refs';
-  grep { $_ !~ [qw/import/] and exists &$_ } keys %{__PACKAGE__ . '::'};
+	no strict 'refs';
+	grep { $_ !~ [qw/import/] and exists &$_ } keys %{__PACKAGE__ . '::'};
 };
 
 ################################################## Helper subs
 
 sub import {
-  strict->import;
-  goto &Exporter::import;
+	strict->import;
+	goto &Exporter::import;
 }
 
 my (%players, %tplayers, @actions);
@@ -58,355 +59,357 @@ my $isday = 0;
 my $first = 1;
 
 sub clean{
-  %players = ();
-  %tplayers = ();
-  @actions = ();
-  $daycnt = 0;
-  $nightcnt = 0;
-  $isday = 0;
-  $first = 1;
+	%players = ();
+	%tplayers = ();
+	@actions = ();
+	$daycnt = 0;
+	$nightcnt = 0;
+	$isday = 0;
+	$first = 1;
 }
 
 sub uniq {
-  my %hash = map { $_ => 1 } @_;
-  keys %hash
+	my %hash = map { $_ => 1 } @_;
+	keys %hash
 }
 
 sub phase {
-  return "Day $daycnt" if $isday;
-  return "Night $nightcnt" unless $isday;
+	return "Day $daycnt" if $isday;
+	return "Night $nightcnt" unless $isday;
 }
 
 sub rolename {
-  my %player = %{$players{$_[0]}};
-  my ($faction, $role) = ($player{faction}, $player{role});
-  if (defined $faction && $faction eq town && $role eq vanilla){
-	undef $faction;
-	$role = 'Vanilla Townie';
-  };
-  my @tokens = ();
-  push @tokens, ucfirst $faction if $faction;
-  for my $flag (@{FLAG()}) {
-	push @tokens, ucfirst $flag if $player{$flag}
-  }
-  push @tokens, ucfirst $role unless $role eq goon && $player{godfather};
-  "@tokens"
+	my %player = %{$players{$_[0]}};
+	my ($faction, $role) = ($player{faction}, $player{role});
+	if (defined $faction && $faction eq town && $role eq vanilla) {
+		undef $faction;
+		$role = 'Vanilla Townie';
+	}
+	my @tokens = ();
+	push @tokens, ucfirst $faction if $faction;
+	for my $flag (@{FLAG()}) {
+		push @tokens, ucfirst $flag if $player{$flag}
+	}
+	push @tokens, ucfirst $role unless $role eq goon && $player{godfather};
+	"@tokens"
 }
 
 sub msg {
-  my ($type, @args) = @_;
-  given ($type){
-	when (MSG_NIGHT) {
-	  my ($night) = @args;
-	  say '' unless $first;
-	  $first = 0;
-	  say "It is Night $night";
-	}
+	my ($type, @args) = @_;
+	given ($type){
+		when (MSG_NIGHT) {
+			my ($night) = @args;
+			say '' unless $first;
+			$first = 0;
+			say "It is Night $night";
+		}
 
-	when (MSG_DAY) {
-	  my ($day) = @args;
-	  say '' unless $first;
-	  $first = 0;
-	  say "It is Day $day";
-	}
+		when (MSG_DAY) {
+			my ($day) = @args;
+			say '' unless $first;
+			$first = 0;
+			say "It is Day $day";
+		}
 
-	when (MSG_PLAYERS_ALIVE) {
-	  @args = sort @args;
-	  say "Players alive: ", join ', ', @args
-	}
+		when (MSG_PLAYERS_ALIVE) {
+			@args = sort @args;
+			say "Players alive: ", join ', ', @args
+		}
 
-	when (MSG_DEATH) {
-	  my %args = @args;
-	  my ($who, $reason) = @args{'target', 'reason'};
-	  my $phase = phase;
-	  my $rolename = rolename $who;
-	  say "$who ($rolename) — $reason $phase";
-	}
+		when (MSG_DEATH) {
+			my %args = @args;
+			my ($who, $reason) = @args{'target', 'reason'};
+			my $phase = phase;
+			my $rolename = rolename $who;
+			say "$who ($rolename) — $reason $phase";
+		}
 
-	when (MSG_GUNCHECK) {
-	  my %args = @args;
-	  my ($gunsmith, $who, $hasgun) = @args{'source', 'target', 'result'};
-	  say "$gunsmith: $who has a gun" if $hasgun;
-	  say "$gunsmith: $who does not have a gun" unless $hasgun;
-	}
+		when (MSG_GUNCHECK) {
+			my %args = @args;
+			my ($gunsmith, $who, $hasgun) = @args{'source', 'target', 'result'};
+			say "$gunsmith: $who has a gun" if $hasgun;
+			say "$gunsmith: $who does not have a gun" unless $hasgun;
+		}
 
-	when (MSG_NORESULT) {
-	  my %args = @args;
-	  my ($who) = $args{'source'};
-	  say "$who: No result"
-	}
+		when (MSG_NORESULT) {
+			my %args = @args;
+			my ($who) = $args{'source'};
+			say "$who: No result"
+		}
 
-	when (MSG_TRACK) {
-	  my %args = @args;
-	  my ($tracker, $who, $result) = @args{'source', 'target', 'result'};
-	  my @result = @{$result};
-	  local $, = ', ';
-	  say "$tracker: $who did not visit anyone" unless scalar @result;
-	  say "$tracker: $who visited: @result" if scalar @result;
-	}
+		when (MSG_TRACK) {
+			my %args = @args;
+			my ($tracker, $who, $result) = @args{'source', 'target', 'result'};
+			my @result = @{$result};
+			local $, = ', ';
+			say "$tracker: $who did not visit anyone" unless scalar @result;
+			say "$tracker: $who visited: @result" if scalar @result;
+		}
 
-	when (MSG_WATCH) {
-	  my %args = @args;
-	  my ($watcher, $who, $result) = @args{'source', 'target', 'result'};
-	  my @result = @{$result};
-	  local $, = ', ';
-	  say "$watcher: $who was not visited by anyone" unless scalar @result;
-	  say "$watcher: $who was visited by: @result" if scalar @result;
-	}
+		when (MSG_WATCH) {
+			my %args = @args;
+			my ($watcher, $who, $result) = @args{'source', 'target', 'result'};
+			my @result = @{$result};
+			local $, = ', ';
+			say "$watcher: $who was not visited by anyone" unless scalar @result;
+			say "$watcher: $who was visited by: @result" if scalar @result;
+		}
 
-	when (MSG_ROLECOP) {
-	  my %args = @args;
-	  my ($rolecop, $who, $role) = @args{'source', 'target', 'result'};
-	  say "$rolecop: $who\'s role is: $role"
-	}
+		when (MSG_ROLECOP) {
+			my %args = @args;
+			my ($rolecop, $who, $role) = @args{'source', 'target', 'result'};
+			say "$rolecop: $who\'s role is: $role"
+		}
 
-	when (MSG_COP) {
-	  my %args = @args;
-	  my ($cop, $who, $ismafia) = @args{'source', 'target', 'result'};
-	  say "$cop: $who is mafia" if $ismafia;
-	  say "$cop: $who is not mafia" unless $ismafia;
+		when (MSG_COP) {
+			my %args = @args;
+			my ($cop, $who, $ismafia) = @args{'source', 'target', 'result'};
+			say "$cop: $who is mafia" if $ismafia;
+			say "$cop: $who is not mafia" unless $ismafia;
+		}
 	}
-  }
 }
 
 sub putaction {
-  my ($delay,  $type, %args) = @_;
-  $actions[$delay]->{$type} //= [];
-  if (exists $args{target} && exists $args{source} && $players{$args{target}}{faction} eq mafia && $players{$args{source}}{weak}) {
-	putaction($delay, ACT_KILL, target => $args{source}, reason => 'targeted scum');
-  }
-  push $actions[$delay]->{$type}, \%args
+	my ($delay,  $type, %args) = @_;
+	$actions[$delay]->{$type} //= [];
+	if (exists $args{target} && exists $args{source} && $players{$args{target}}{faction} eq mafia && $players{$args{source}}{weak}) {
+		putaction($delay, ACT_KILL, target => $args{source}, reason => 'targeted scum');
+	}
+	push $actions[$delay]->{$type}, \%args
 }
 
 sub doaction {
-  my ($type, $args) = @_;
-  my %args = %$args;
-  my $source = $args{source};
-  my $target = $args{target};
-  if (defined $source && defined $target) {
-	# Watcher and tracker variables
-	$tplayers{$source}{targets} //= [];
-	push $tplayers{$source}{targets}, $target;
-	$tplayers{$target}{sources} //= [];
-	push $tplayers{$target}{sources}, $source;
+	my ($type, $args) = @_;
+	my %args = %$args;
+	my $source = $args{source};
+	my $target = $args{target};
+	if (defined $source && defined $target) {
+		# Watcher and tracker variables
+		$tplayers{$source}{targets} //= [];
+		push $tplayers{$source}{targets}, $target;
+		$tplayers{$target}{sources} //= [];
+		push $tplayers{$target}{sources}, $source;
 
-	# Copy this action to everybody hiding behind $target
-	if (exists $tplayers{$target}{hiders}) {
-	  for my $target (@{$tplayers{$target}{hiders}}) {
-		my %args = %args;
-		$args{target} = $target;
-		$args{hidepierce} = 1;
-		doaction($type, \%args);
-	  }
+		# Copy this action to everybody hiding behind $target
+		if (exists $tplayers{$target}{hiders}) {
+			for my $target (@{$tplayers{$target}{hiders}}) {
+				my %args = %args;
+				$args{target} = $target;
+				$args{hidepierce} = 1;
+				doaction($type, \%args);
+			}
+		}
+
+		# Check if the action should be blocked
+		my $strongkill = $type eq ACT_KILL && $args{strong};
+		my $roleblocked = $tplayers{$source}{roleblocked};
+		my $hidden = $tplayers{$target}{hidden};
+		my $hidepierce = $args{hidepierce};
+		if ($source && (( $roleblocked && !$strongkill ) || ($hidden && !$hidepierce) )) {
+			msg MSG_NORESULT, %args if $type ~~ INVESTIGATIVE_ACTIONS;
+			return
+		}
 	}
 
-	# Check if the action should be blocked
-	my $strongkill = $type eq ACT_KILL && $args{strong};
-	my $roleblocked = $tplayers{$source}{roleblocked};
-	my $hidden = $tplayers{$target}{hidden};
-	my $hidepierce = $args{hidepierce};
-	if ($source && (( $roleblocked && !$strongkill ) || ($hidden && !$hidepierce) )) {
-	  msg MSG_NORESULT, %args if $type ~~ INVESTIGATIVE_ACTIONS;
-	  return
-	}
-  }
 
+	given ($type) {
+		when(ACT_KILL) {
+			break if $tplayers{$target}{bulletproof} && defined $source;
+			if ($tplayers{$target}{guard_count} && defined $source) {
+				$tplayers{$target}{guard_count}--;
+				# Copy this action to the first guard
+				$args{target} = shift $tplayers{$target}{guards};
+				@_ = ($type, %args);
+				goto &doaction;
+			}
+			if ($tplayers{$target}{protection} && !$args{strong}) {
+				$tplayers{$target}{protection}--;
+				break
+			}
+			msg MSG_DEATH, %args;
+			delete $players{$target}
+		}
 
-  given ($type) {
-	when(ACT_KILL) {
-	  break if $tplayers{$target}{bulletproof} && defined $source;
-	  if ($tplayers{$target}{guard_count} && defined $source) {
-		$tplayers{$target}{guard_count}--;
-		# Copy this action to the first guard
-		$args{target} = shift $tplayers{$target}{guards};
-		@_ = ($type, %args);
-		goto &doaction;
-	  }
-	  if ($tplayers{$target}{protection} && !$args{strong}) {
-		$tplayers{$target}{protection}--;
-		break
-	  }
-	  msg MSG_DEATH, %args;
-	  delete $players{$target}
-	}
+		when(ACT_LYNCH){
+			if ($tplayers{$target}{guard_count}) {
+				$tplayers{$target}{guard_count}--;
+				$args{target} = shift $tplayers{$target}{guards};
+				$target=$args{target};
+			}
+			if ($tplayers{$target}{protection}) {
+				$tplayers{$target}{protection}--;
+				break
+			}
+			msg MSG_DEATH, %args, reason => 'lynched';
+			delete $players{$target}
+		}
 
-	when(ACT_LYNCH){
-	  if ($tplayers{$target}{guard_count}) {
-		$tplayers{$target}{guard_count}--;
-		$args{target} = shift $tplayers{$target}{guards};
-		$target=$args{target};
-	  }
-	  if ($tplayers{$target}{protection}) {
-		$tplayers{$target}{protection}--;
-		break
-	  }
-	  msg MSG_DEATH, %args, reason => 'lynched';
-	  delete $players{$target}
-	}
+		when(ACT_PROTECT){
+			my $count = $args{count} // 1;
+			$tplayers{$target}{protection} += $count unless $tplayers{$target}{macho}
+		}
 
-	when(ACT_PROTECT){
-	  my $count = $args{count} // 1;
-	  $tplayers{$target}{protection} += $count unless $tplayers{$target}{macho}
-	}
+		when(ACT_ROLEBLOCK){
+			$tplayers{$target}{roleblocked} = 1
+		}
 
-	when(ACT_ROLEBLOCK){
-	  $tplayers{$target}{roleblocked} = 1
-	}
+		when(ACT_GUNCHECK){
+			my $role = $players{$target}{role};
+			my $hasgun = $role ~~ GUNROLES || ($players{$target}{faction} eq mafia && $role ne doctor);
+			msg MSG_GUNCHECK, %args, result => $hasgun
+		}
 
-	when(ACT_GUNCHECK){
-	  my $role = $players{$target}{role};
-	  my $hasgun = $role ~~ GUNROLES || ($players{$target}{faction} eq mafia && $role ne doctor);
-	  msg MSG_GUNCHECK, %args, result => $hasgun
-	}
+		when(ACT_TRACK_RESULT){
+			msg MSG_TRACK, %args, result => [ uniq @{$tplayers{$target}{targets} // []} ];
+		}
 
-	when(ACT_TRACK_RESULT){
-	  msg MSG_TRACK, %args, result => [ uniq @{$tplayers{$target}{targets} // []} ];
-	}
+		when(ACT_WATCH_RESULT){
+			msg MSG_WATCH, %args, result => [ uniq @{$tplayers{$target}{sources} // []} ];
+		}
 
-	when(ACT_WATCH_RESULT){
-	  msg MSG_WATCH, %args, result => [ uniq @{$tplayers{$target}{sources} // []} ];
-	}
+		when(ACT_GUARD){
+			$tplayers{$target}{guard_count}++;
+			$tplayers{$target}{guards} //= [];
+			push $tplayers{$target}{guards}, $source;
+		}
 
-	when(ACT_GUARD){
-	  $tplayers{$target}{guard_count}++;
-	  $tplayers{$target}{guards} //= [];
-	  push $tplayers{$target}{guards}, $source;
-	}
+		when(ACT_ROLECOP){
+			my $result = $players{$target}{role};
+			$result = vanilla if $result eq goon;
+			msg MSG_ROLECOP, %args, result => ucfirst $result
+		}
 
-	when(ACT_ROLECOP){
-	  my $result = $players{$target}{role};
-	  $result = vanilla if $result eq goon;
-	  msg MSG_ROLECOP, %args, result => ucfirst $result
-	}
+		when(ACT_COP){
+			my $result = $players{$target}{faction} eq mafia;
+			$result = 1 if $players{$target}{miller};
+			$result = 0 if $players{$target}{godfather};
+			msg MSG_COP, %args, result => $result
+		}
 
-	when(ACT_COP){
-	  my $result = $players{$target}{faction} eq mafia;
-	  $result = 1 if $players{$target}{miller};
-	  $result = 0 if $players{$target}{godfather};
-	  msg MSG_COP, %args, result => $result
+		when(ACT_HIDE){
+			$tplayers{$source}{hidden} = 1;
+			$tplayers{$target}{hiders} //= [];
+			push $tplayers{$target}{hiders}, $source
+		}
 	}
-
-	when(ACT_HIDE){
-	  $tplayers{$source}{hidden} = 1;
-	  $tplayers{$target}{hiders} //= [];
-	  push $tplayers{$target}{hiders}, $source
-	}
-  }
 }
 
 sub process_phase_change {
-  %tplayers = %{dclone \%players};
-  my $actions = shift @actions;
-  for my $type(@{ACTION_ORDER()}) {
-	doaction $type, $_ for @{$actions->{$type}}
-  }
+	%tplayers = %{dclone \%players};
+	my $actions = shift @actions;
+	for my $type (@{ACTION_ORDER()}) {
+		doaction $type, $_ for @{$actions->{$type}}
+	}
 }
 
 ################################################## User subs
 
 sub player {
-  my ($name, @args) = @_;
-  my %player;
-  for my $trait (@args) {
-	given ($trait) {
-	  $player{role} = $trait when ROLE;
-	  $player{faction} = $trait when FACTION;
-	  $player{$trait} = 1 when FLAG;
+	my ($name, @args) = @_;
+	my %player;
+	for my $trait (@args) {
+		given ($trait) {
+			$player{role} = $trait when ROLE;
+			$player{faction} = $trait when FACTION;
+			$player{$trait} = 1 when FLAG;
+		}
 	}
-  }
 
-  $players{$name} = \%player;
+	$players{$name} = \%player;
 }
 
 sub day {
-  process_phase_change;
-  $isday = 1;
-  msg MSG_DAY, ++$daycnt;
-  msg MSG_PLAYERS_ALIVE, keys %players;
+	process_phase_change;
+	$isday = 1;
+	msg MSG_DAY, ++$daycnt;
+	msg MSG_PLAYERS_ALIVE, keys %players;
 }
 
 sub night {
-  process_phase_change;
-  $isday = 0;
-  msg MSG_NIGHT, ++$nightcnt;
-  msg MSG_PLAYERS_ALIVE, keys %players;
+	process_phase_change;
+	$isday = 0;
+	msg MSG_NIGHT, ++$nightcnt;
+	msg MSG_PLAYERS_ALIVE, keys %players;
 }
 
 sub lynch {
-  my ($who) = @_;
-  putaction 0, ACT_LYNCH, target => $who;
+	my ($who) = @_;
+	putaction 0, ACT_LYNCH, target => $who;
 }
 
 sub factionkill {
-  my ($killer, $who, $reason, @args) = @_;
-  putaction 0, ACT_KILL, target => $who, source => $killer, reason => $reason, @args;
+	my ($killer, $who, $reason, @args) = @_;
+	putaction 0, ACT_KILL, target => $who, source => $killer, reason => $reason, @args;
 }
 
 sub protect {
-  my ($doctor, $who) = @_;
-  putaction 0, ACT_PROTECT, target => $who, source => $doctor;
+	my ($doctor, $who) = @_;
+	putaction 0, ACT_PROTECT, target => $who, source => $doctor;
 }
 
 sub vig {
-  my ($vig, $who, $reason, @args) = @_;
-  putaction 0, ACT_KILL, target => $who, source => $vig, reason => $reason, @args;
+	my ($vig, $who, $reason, @args) = @_;
+	putaction 0, ACT_KILL, target => $who, source => $vig, reason => $reason, @args;
 }
 
 sub roleblock {
-  my ($roleblocker, $who) = @_;
-  putaction 0, ACT_ROLEBLOCK, target => $who, source => $roleblocker;
+	my ($roleblocker, $who) = @_;
+	putaction 0, ACT_ROLEBLOCK, target => $who, source => $roleblocker;
 }
 
 sub jailkeep {
-  my ($jailkeeper, $who) = @_;
-  putaction 0, ACT_ROLEBLOCK, target => $who, source => $jailkeeper;
-  putaction 0, ACT_PROTECT, target => $who, source => $jailkeeper, count => 1000;
+	my ($jailkeeper, $who) = @_;
+	putaction 0, ACT_ROLEBLOCK, target => $who, source => $jailkeeper;
+	putaction 0, ACT_PROTECT, target => $who, source => $jailkeeper, count => 1000;
 }
 
 sub guncheck {
-  my ($gunsmith, $who) = @_;
-  putaction 0, ACT_GUNCHECK, target => $who, source => $gunsmith;
+	my ($gunsmith, $who) = @_;
+	putaction 0, ACT_GUNCHECK, target => $who, source => $gunsmith;
 }
 
 sub track {
-  my ($tracker, $who) = @_;
-  putaction 0, ACT_TRACK, target => $who, source => $tracker;
-  putaction 0, ACT_TRACK_RESULT, target => $who, source => $tracker;
+	my ($tracker, $who) = @_;
+	putaction 0, ACT_TRACK, target => $who, source => $tracker;
+	putaction 0, ACT_TRACK_RESULT, target => $who, source => $tracker;
 }
 
 sub watch {
-  my ($watcher, $who) = @_;
-  putaction 0, ACT_WATCH, target => $who, source => $watcher;
-  putaction 0, ACT_WATCH_RESULT, target => $who, source => $watcher;
+	my ($watcher, $who) = @_;
+	putaction 0, ACT_WATCH, target => $who, source => $watcher;
+	putaction 0, ACT_WATCH_RESULT, target => $who, source => $watcher;
 }
 
 sub guard {
-  my ($guard, $who) = @_;
-  putaction 0, ACT_GUARD, target => $who, source => $guard;
+	my ($guard, $who) = @_;
+	putaction 0, ACT_GUARD, target => $who, source => $guard;
 }
 
 sub rolecopcheck {
-  my ($rolecop, $who) = @_;
-  putaction 0, ACT_ROLECOP, target => $who, source => $rolecop;
+	my ($rolecop, $who) = @_;
+	putaction 0, ACT_ROLECOP, target => $who, source => $rolecop;
 }
 
 sub copcheck {
-  my ($cop, $who) = @_;
-  putaction 0, ACT_COP, target => $who, source => $cop;
+	my ($cop, $who) = @_;
+	putaction 0, ACT_COP, target => $who, source => $cop;
 }
 
 sub skill {
-  my ($sk, $who, $reason, @args) = @_;
-  putaction 0, ACT_KILL, target => $who, source => $sk, reason => $reason, @args;
+	my ($sk, $who, $reason, @args) = @_;
+	putaction 0, ACT_KILL, target => $who, source => $sk, reason => $reason, @args;
 }
 
 sub hide {
-  my ($hider, $who) = @_;
-  putaction 0, ACT_HIDE, target => $who, source => $hider;
+	my ($hider, $who) = @_;
+	putaction 0, ACT_HIDE, target => $who, source => $hider;
 }
 
 1;
 __END__
+
+=encoding utf-8
 
 =head1 NAME
 

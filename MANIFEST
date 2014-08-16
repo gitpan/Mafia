@@ -15,4 +15,6 @@ t/examples/Newbie-0002.pl
 t/examples/Newbie-0005.pl
 t/examples/Newbie-0002.out
 lib/Mafia.pm
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml                                 Module YAML meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)
+SIGNATURE                                Public-key signature (added by MakeMaker)

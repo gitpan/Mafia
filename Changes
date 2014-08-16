@@ -1,4 +1,12 @@
 Revision history for Perl extension Mafia.
 
-0.001 Mon 26 Aug 23:07:19 EEST 2013
-	- Initial release
+0.001001 2014-08-17T00:18+03:00
+ - CPAN Day cleanup release
+ - Update Changes to follow CPAN::Changes::Spec
+ - Set POD encoding to utf-8
+ - Reindent code, tests, Makefile.PL
+ - Disable dynamic_config and enable SIGN
+ - Disable smartmatch warnings
+
+0.001 2013-08-26T23:07:19+03:00
+ - Initial release
